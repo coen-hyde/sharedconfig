@@ -43,8 +43,11 @@ function SharedConfig(targetdb) {
     this._current = null;
     
     // initialise the environments array to empty
-    this._environments = null;
+    this._environments = [];
     
+    // flag to indicate if a connection to couchdb has been established
+    this._connected = false;
+
     // initialise the nano connection
     this._db = nano(targetdb);
     
@@ -56,14 +59,12 @@ function SharedConfig(targetdb) {
     this._db.list(function(err, info) {
         if (! err) {
             debug('retrieve list of config docs from db: ', info.rows);
-            if (info.rows.length === 0) {
-                console.log('error connecting to the db');
-                console.log(err, info);
-            }
             
             config._environments = info.rows.map(function(doc) {
                 return doc.id;
             });
+
+            config._connected = true;
         }
         
         debug('finished querying db, triggering appropriate event');
@@ -141,10 +142,10 @@ SharedConfig.prototype.filter = function(input) {
 SharedConfig.prototype.use = function(environment, callback) {
     var config = this,
         db = this._db,
-        targetDocs = ['default', environment];
+        targetDocs = ['default'];
     
     // if we don't yet have environments defined, we aren't connected, so wait
-    if (! this._environments) {
+    if (! config._connected) {
         return this.once('connect', this.use.bind(this, environment, callback));
     }
         
@@ -154,8 +155,8 @@ SharedConfig.prototype.use = function(environment, callback) {
     };
         
     // if we are not currently aware of the environment return an error via the callback
-    if (this._environments.indexOf(environment) < 0) {
-        return callback(new Error('Unable to use the "' + environment + '" environment'));
+    if (this._environments.indexOf(environment) > -1) {
+        targetDocs.push(environment);
     }
 
     // release the existing configuration
